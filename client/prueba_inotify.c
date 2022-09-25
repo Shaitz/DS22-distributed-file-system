@@ -32,7 +32,8 @@ int main(int argc, char *argv[])
   if ( fd < 0 )
     perror( "inotify_init" );
 
-  FILE* fp = popen("python3 cli_fich.py", "w");
+  char command[] = "python3 cli_fich.py";
+  FILE* fp = popen(command, "w");
 
   if (fp == NULL)
   {
