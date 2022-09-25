@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import socket, sys, os
+import socket, sys, os, time
 import szasar as szasar
 
 SERVER = 'localhost'
@@ -61,6 +61,7 @@ def int2bytes( n ):
 
 
 if __name__ == "__main__":
+	
 	if len( sys.argv ) > 3:
 		print( "Uso: {} [<servidor> [<puerto>]]".format( sys.argv[0] ) )
 		exit( 2 )
@@ -73,23 +74,69 @@ if __name__ == "__main__":
 	s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 	s.connect( (SERVER, PORT) )
 
-	while True:
-		user = input( "Introduce el nombre de usuario: " )
-		message = "{}{}\r\n".format( szasar.Command.User, user )
-		s.sendall( message.encode( "ascii" ) )
-		message = szasar.recvline( s ).decode( "ascii" )
-		if iserror( message ):
-			continue
+	user = "sar"
+	message = "{}{}\r\n".format( szasar.Command.User, user )
+	s.sendall( message.encode( "ascii" ) )
+	message = szasar.recvline( s ).decode( "ascii" )
 
-		password = input( "Introduce la contraseña: " )
-		message = "{}{}\r\n".format( szasar.Command.Password, password )
-		s.sendall( message.encode( "ascii" ) )
-		message = szasar.recvline( s ).decode( "ascii" )
-		if not iserror( message ):
-			break
-
+	password = "sar"
+	message = "{}{}\r\n".format( szasar.Command.Password, password )
+	s.sendall( message.encode( "ascii" ) )
+	message = szasar.recvline( s ).decode( "ascii" )
 
 	while True:
+		stdin = sys.stdin.readline().split()
+		event = stdin[0]
+		name = stdin[1]
+
+		if event == "DIR_CREATED":
+			message = "{}{}\r\n".format( szasar.Command.Create_Dir, name )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if not iserror( message ):
+				print( "El directorio {} se ha creado correctamente.".format( name ) )
+
+		elif event == "DIR_DELETED":
+			message = "{}{}\r\n".format( szasar.Command.Delete_Dir, name )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if not iserror( message ):
+				print( "El directorio {} se ha eliminado correctamente.".format( name ) )
+
+		elif event == "FILE_CREATED" or event == "FILE_MODIFIED" or event == "FILE_MOVED_TO":
+			try:
+				filesize = os.path.getsize( "files/" + name )
+				with open( "files/" + name, "rb" ) as f:
+					filedata = f.read()
+					f.close()
+			except:
+				print( "No se ha podido acceder al fichero {}.".format( name ) )
+				continue
+
+			message = "{}{}?{}\r\n".format( szasar.Command.Upload, name, filesize )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if iserror( message ):
+				continue
+
+			message = "{}\r\n".format( szasar.Command.Upload2 )
+			s.sendall( message.encode( "ascii" ) )
+			s.sendall( filedata )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if not iserror( message ):
+				print( "El fichero {} se ha enviado correctamente.".format( name ) )
+
+		elif event == "FILE_DELETED" or event == "FILE_MOVED_FROM":
+			message = "{}{}\r\n".format( szasar.Command.Delete, name )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+			if not iserror( message ):
+				print( "El fichero {} se ha borrado correctamente.".format( name ) )
+	'''
 		option = Menu.menu()
 
 		if option == Menu.List:
@@ -138,40 +185,10 @@ if __name__ == "__main__":
 			else:
 				print( "El fichero {} se ha descargado correctamente.".format( filename ) )
 
-		elif option == Menu.Upload:
-			filename = input( "Indica el fichero que quieres subir: " )
-			try:
-				filesize = os.path.getsize( filename )
-				with open( filename, "rb" ) as f:
-					filedata = f.read()
-			except:
-				print( "No se ha podido acceder al fichero {}.".format( filename ) )
-				continue
-
-			message = "{}{}?{}\r\n".format( szasar.Command.Upload, filename, filesize )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if iserror( message ):
-				continue
-
-			message = "{}\r\n".format( szasar.Command.Upload2 )
-			s.sendall( message.encode( "ascii" ) )
-			s.sendall( filedata )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if not iserror( message ):
-				print( "El fichero {} se ha enviado correctamente.".format( filename ) )
-
-		elif option == Menu.Delete:
-			filename = input( "Indica el fichero que quieres borrar: " )
-			message = "{}{}\r\n".format( szasar.Command.Delete, filename )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if not iserror( message ):
-				print( "El fichero {} se ha borrado correctamente.".format( filename ) )
-
 		elif option == Menu.Exit:
 			message = "{}\r\n".format( szasar.Command.Exit )
 			s.sendall( message.encode( "ascii" ) )
 			message = szasar.recvline( s ).decode( "ascii" )
 			break
+	'''
 	s.close()

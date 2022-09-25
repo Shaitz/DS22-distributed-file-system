@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import shutil
 import socket, sys, os, signal
 import szasar as szasar
 
@@ -143,6 +144,34 @@ def session( s ):
 		elif message.startswith( szasar.Command.Exit ):
 			sendOK( s )
 			return
+
+		elif message.startswith( szasar.Command.Create_Dir ):
+			if state != State.Main:
+				sendER( s )
+				continue
+			if user == 0:
+				sendER( s, 7 )
+				continue
+			try:
+				os.mkdir( os.path.join( FILES_PATH, message[4:] ) )
+			except:
+				sendER( s, 12 )
+			else:
+				sendOK( s )
+
+		elif message.startswith( szasar.Command.Delete_Dir ):
+			if state != State.Main:
+				sendER( s )
+				continue
+			if user == 0:
+				sendER( s, 7 )
+				continue
+			try:
+				shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
+			except:
+				sendER( s, 13 )
+			else:
+				sendOK( s )
 
 		else:
 			sendER( s )

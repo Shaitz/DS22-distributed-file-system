@@ -93,9 +93,14 @@ int main(int argc, char *argv[])
             fprintf(fp, "FILE_MODIFIED %s\n", event->name);
             fflush(fp);
         }
-        else if (event->mask & IN_MOVE)
+        else if (event->mask & IN_MOVED_FROM)
         {
-          fprintf(fp, "FILE_MOVED %s\n", event->name);
+          fprintf(fp, "FILE_MOVED_FROM %s\n", event->name);
+          fflush(fp);
+        }
+        else if (event->mask & IN_MOVED_TO)
+        {
+          fprintf(fp, "FILE_MOVED_TO %s\n", event->name);
           fflush(fp);
         }
       }
