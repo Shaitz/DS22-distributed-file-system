@@ -106,6 +106,8 @@ if __name__ == "__main__":
 				print( "El directorio {} se ha eliminado correctamente.".format( name ) )
 
 		elif event == "FILE_CREATED" or event == "FILE_MODIFIED" or event == "FILE_MOVED_TO":
+			if os.path.isfile("files/." + name + ".swp"):
+				continue
 			try:
 				filesize = os.path.getsize( "files/" + name )
 				with open( "files/" + name, "rb" ) as f:
@@ -131,6 +133,33 @@ if __name__ == "__main__":
 				print( "El fichero {} se ha enviado correctamente.".format( name ) )
 
 		elif event == "FILE_DELETED" or event == "FILE_MOVED_FROM":
+			if name.startswith( "." ):
+				file_being_edited = name.split(".")[1]
+
+				try:
+					filesize = os.path.getsize( "files/" + file_being_edited )
+					with open( "files/" + file_being_edited, "rb" ) as f:
+						filedata = f.read()
+						f.close()
+				except:
+					print( "No se ha podido acceder al fichero {}.".format( file_being_edited ) )
+					continue
+
+				message = "{}{}?{}\r\n".format( szasar.Command.Upload, file_being_edited, filesize )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
+
+				if iserror( message ):
+					continue
+
+				message = "{}\r\n".format( szasar.Command.Upload2 )
+				s.sendall( message.encode( "ascii" ) )
+				s.sendall( filedata )
+				message = szasar.recvline( s ).decode( "ascii" )
+
+				if not iserror( message ):
+					print( "El fichero {} se ha enviado correctamente.".format( file_being_edited ) )
+
 			message = "{}{}\r\n".format( szasar.Command.Delete, name )
 			s.sendall( message.encode( "ascii" ) )
 			message = szasar.recvline( s ).decode( "ascii" )
