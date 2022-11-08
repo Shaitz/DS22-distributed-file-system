@@ -1,5 +1,5 @@
 class Command:
-	User, Password, List, Download, Download2, Upload, Upload2, Delete, Exit, Create_Dir, Delete_Dir, Rename_File = ("USER", "PASS", "LIST", "DOWN", "DOW2", "UPLO", "UPL2", "DELE", "EXIT", "CDIR", "DDIR", "RFIL")
+	User, Password, List, Download, Download2, Upload, Upload2, Delete, Exit, Create_Dir, Delete_Dir, Rename_File, Attr_Modified = ("USER", "PASS", "LIST", "DOWN", "DOW2", "UPLO", "UPL2", "DELE", "EXIT", "CDIR", "DDIR", "RFIL", "ATTR")
 
 def recvline( s, removeEOL = True ):
 	line = b''

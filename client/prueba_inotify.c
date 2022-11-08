@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
       exit(1);
   }
 
-  wd_cd = inotify_add_watch( fd, argv[1], IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE );
+  wd_cd = inotify_add_watch( fd, argv[1], IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE | IN_ATTRIB );
 
   /*read to determine the event change happens on the directory. Actually this read blocks until the change event occurs*/ 
   struct inotify_event event_st, *event;
@@ -101,6 +101,11 @@ int main(int argc, char *argv[])
         else if (event->mask & IN_MOVED_TO)
         {
           fprintf(fp, "FILE_MOVED_TO %s\n", event->name);
+          fflush(fp);
+        }
+        else if (event->mask & IN_ATTRIB)
+        {
+          fprintf(fp, "FILE_ATTRIB_CHANGED %s\n", event->name);
           fflush(fp);
         }
       }

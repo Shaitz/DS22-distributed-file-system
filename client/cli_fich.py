@@ -178,10 +178,16 @@ if __name__ == "__main__":
 			message = szasar.recvline( s ).decode( "ascii" )
 
 			if not iserror( message ):
-				print( "El directorio {} se ha creado correctamente.".format( name ) )
+				print( "El fichero {} se ha renombrado correctamente.".format( name ) )
 		
-		elif event == "IN_ATTRIB":
-			continue
+		elif event == "FILE_ATTRIB_CHANGED":
+			status = os.stat( "files/" + name )
+			message = "{}{}\r\n".format( szasar.Command.Attr_Modified, name + " " + str( status.st_mode ) + " " + str( status.st_mtime ) + " " + str( status.st_atime ) )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if not iserror( message ):
+				print( "Los atributos del fichero {} se ha actualizado correctamente.".format( name ) )
 	'''
 		option = Menu.menu()
 

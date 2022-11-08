@@ -188,6 +188,23 @@ def session( s ):
 			else:
 				sendOK( s )
 
+		elif message.startswith( szasar.Command.Attr_Modified ):
+			if state != State.Main:
+				sendER( s )
+				continue
+			if user == 0:
+				sendER( s, 7 )
+				continue
+			try:
+				filename, permissions, timestamp, atime = message[4:].split(' ')
+				perm_mask = oct(int(permissions) & 0o777)
+				os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
+				os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
+			except:
+				sendER( s, 2 )
+			else:
+				sendOK( s )
+
 		else:
 			sendER( s )
 
