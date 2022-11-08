@@ -172,6 +172,21 @@ def session( s ):
 				sendER( s, 13 )
 			else:
 				sendOK( s )
+		
+		elif message.startswith( szasar.Command.Rename_File ):
+			if state != State.Main:
+				sendER( s )
+				continue
+			if user == 0:
+				sendER( s, 7 )
+				continue
+			try:
+				oldname, newname = message[4:].split(' ')
+				os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
+			except:
+				sendER( s, 14 )
+			else:
+				sendOK( s )
 
 		else:
 			sendER( s )

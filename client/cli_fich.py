@@ -17,7 +17,8 @@ ER_MSG = (
 	"El fichero es demasiado grande.",
 	"Error al preparar el fichero para subirlo.",
 	"Error al subir el fichero.",
-	"Error al borrar el fichero." )
+	"Error al borrar el fichero.",
+	"Error al cambiar de nombre" )
 
 class Menu:
 	List, Download, Upload, Delete, Exit = range( 1, 6 )
@@ -84,6 +85,8 @@ if __name__ == "__main__":
 	s.sendall( message.encode( "ascii" ) )
 	message = szasar.recvline( s ).decode( "ascii" )
 
+	file_to_rename = ""
+
 	while True:
 		stdin = sys.stdin.readline().split()
 		event = stdin[0]
@@ -105,7 +108,7 @@ if __name__ == "__main__":
 			if not iserror( message ):
 				print( "El directorio {} se ha eliminado correctamente.".format( name ) )
 
-		elif event == "FILE_CREATED" or event == "FILE_MODIFIED" or event == "FILE_MOVED_TO":
+		elif event == "FILE_CREATED" or event == "FILE_MODIFIED":
 			if os.path.isfile("files/." + name + ".swp"):
 				continue
 			try:
@@ -132,7 +135,7 @@ if __name__ == "__main__":
 			if not iserror( message ):
 				print( "El fichero {} se ha enviado correctamente.".format( name ) )
 
-		elif event == "FILE_DELETED" or event == "FILE_MOVED_FROM":
+		elif event == "FILE_DELETED":
 			if name.startswith( "." ):
 				file_being_edited = name.split(".")[1]
 
@@ -165,6 +168,20 @@ if __name__ == "__main__":
 			message = szasar.recvline( s ).decode( "ascii" )
 			if not iserror( message ):
 				print( "El fichero {} se ha borrado correctamente.".format( name ) )
+
+		elif event == "FILE_MOVED_FROM":
+			file_to_rename = name
+
+		elif event == "FILE_MOVED_TO":
+			message = "{}{}\r\n".format( szasar.Command.Rename_File, file_to_rename + " " + name )
+			s.sendall( message.encode( "ascii" ) )
+			message = szasar.recvline( s ).decode( "ascii" )
+
+			if not iserror( message ):
+				print( "El directorio {} se ha creado correctamente.".format( name ) )
+		
+		elif event == "IN_ATTRIB":
+			continue
 	'''
 		option = Menu.menu()
 
