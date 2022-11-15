@@ -23,7 +23,7 @@ After the server is running, we can open another terminal and start the client b
 ./prueba_inotify <directory>
 ```
 
-Now that the server and client are running, we can start making changes in the directory monitored by *inotify* inside the client and the contents should be replicated inside the server directory.<br>
+Now that the server and client are running, we can start making changes in the directory monitored by *inotify* inside the client and the contents should be replicated inside the server directory.<br><br>
 NOTE: the directories created inside the monitored directory are not monitored so changes made there won't be replicated.
 
 ## Modifications ##
