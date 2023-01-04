@@ -11,7 +11,7 @@ MAX_FILE_SIZE = 10 * 1 << 20 # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
 USERS = ("anonimous", "sar", "sza")
 PASSWORDS = ("", "sar", "sza")
-PRIMARY = True
+PRIMARY = False
 
 class State:
 	Identification, Authentication, Main, Downloading, Uploading = range(5)
@@ -215,14 +215,13 @@ def session( s ):
 if __name__ == "__main__":
 
 	if PRIMARY:
-		s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-		s.bind(('', PORT))
-		s.listen(5)
-
 		s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 		s_server.bind(("", SERVER_PORT))
 		s_server.listen(5)
 
+		s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+		s.bind(('', PORT))
+		s.listen(5)
 	else:
 		s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 		s_server2.connect( ('localhost', SERVER_PORT) )
@@ -236,6 +235,8 @@ if __name__ == "__main__":
 	while True:
 		if PRIMARY:
 			dialog, address = s.accept()
+			dialog_server, address_server = s_server.accept()
+
 			if dialog:
 				print( "Cliente: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
 				if( os.fork() ):
@@ -246,9 +247,7 @@ if __name__ == "__main__":
 					dialog.close()
 					exit( 0 )
 
-			dialog_server, address_server = s_server.accept()
-
-			if dialog_server:
+			elif dialog_server:
 				print( "Servidor: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
 				if( os.fork() ):
 					dialog_server.close()
