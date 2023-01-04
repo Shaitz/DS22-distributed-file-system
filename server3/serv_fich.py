@@ -3,6 +3,7 @@
 import shutil
 import socket, sys, os, signal
 import szasar as szasar
+import select
 
 PORT = 6012
 SERVER_PORT = 6013
@@ -215,13 +216,14 @@ def session( s ):
 if __name__ == "__main__":
 
 	if PRIMARY:
+		s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+		s.bind(('', PORT))
+		s.listen(5)
+
 		s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 		s_server.bind(("", SERVER_PORT))
 		s_server.listen(5)
 
-		s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-		s.bind(('', PORT))
-		s.listen(5)
 	else:
 		s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 		s_server2.connect( ('localhost', SERVER_PORT) )
@@ -234,25 +236,27 @@ if __name__ == "__main__":
 
 	while True:
 		if PRIMARY:
-			dialog, address = s.accept()
-			dialog_server, address_server = s_server.accept()
+			readable, writable, exceptional = select.select([s, s_server], [], [])
 
-			if dialog:
-				print( "Cliente: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
-				if( os.fork() ):
-					dialog.close()
-				else:
-					s.close()
-					session( dialog )
-					dialog.close()
-					exit( 0 )
+			for sock in readable:
+				if sock == s:
+					(dialog, address) = s.accept()
+					print( "Cliente: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
+					if( os.fork() ):
+						dialog.close()
+					else:
+						s.close()
+						session( dialog )
+						dialog.close()
+						exit( 0 )
 
-			elif dialog_server:
-				print( "Servidor: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
-				if( os.fork() ):
-					dialog_server.close()
-				else:
-					s_server.close()
-					session( dialog_server )
-					dialog_server.close()
-					exit( 0 )
+				elif sock == s_server:
+					(dialog_server, address_server) = s_server.accept()
+					print( "Servidor: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
+					if( os.fork() ):
+						dialog_server.close()
+					else:
+						s_server.close()
+						session( dialog_server )
+						dialog_server.close()
+						exit( 0 )
