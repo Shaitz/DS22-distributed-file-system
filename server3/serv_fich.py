@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
     def signal_handler(sig, frame):
         s.close()
-        s_server1.close()
+        s_server3.close()
         sys.exit(0)
     signal.signal(signal.SIGCHLD, signal_handler)
 
@@ -288,13 +288,14 @@ if __name__ == "__main__":
                             replies = []
 
                             s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
                             s_server2.connect( ('', SERVER2_PORT) )
                             s_server2.sendall(message_complete.encode())
                             s2_message = s_server2.recv(1024).decode()
                             replies.append(s2_message)
                             s_server2.close()
-
-                            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            
                             s_server1.connect( ('', SERVER1_PORT) )
                             s_server1.sendall(message_complete.encode())
                             s1_message = s_server1.recv(1024).decode()
@@ -314,15 +315,11 @@ if __name__ == "__main__":
         else:
             sockets = [s_server3]
             while True:
-                readable, writable, exceptional = select.select(sockets, [], [])
+                readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
                 for sock in readable:
                     (dialog, address) = sock.accept()
                     message_complete = dialog.recv(1024).decode()
-
-                    if message_complete == 'OK' or message_complete == 'ER':
-                        dialog.close()
-                        continue
 
                     message_split = message_complete.split('-')
                     message_id = message_split[0]
@@ -344,18 +341,20 @@ if __name__ == "__main__":
                                 dialog.close()
                             else:
                                 messages.append(message_id)
-                                print ("Appended to messages: " + message_id)
                                 dialog.sendall('OK'.encode())
                                 dialog.close()
 
+                            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
                             s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            
+                            print ("Sending message to server1...")
                             s_server1.connect( ('', SERVER1_PORT) )
                             s_server1.sendall(message_complete.encode())
                             s1_message = s_server1.recv(1024).decode()
+                            print ("Message received from server1: " + s1_message)
                             s_server1.close()
 
-                            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            print ("Sending message to server2...")
                             s_server2.connect( ('', SERVER2_PORT) )
                             s_server2.sendall(message_complete.encode())
-                            s2_message = s_server2.recv(1024).decode()
                             s_server2.close()

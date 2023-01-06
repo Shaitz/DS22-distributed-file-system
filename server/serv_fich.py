@@ -168,14 +168,14 @@ def session(s):
             s_server1.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
             new_message = s_server1.recv(1024).decode()
             s_server1.close()
-            print ("New message received: " + new_message + "")
+            print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
                 MESSAGE_ID += 1
-                print ("OK! Sending back to client...")
+                print ("Child: OK! Sending back to client...")
                 sendOK( s )
             else:
-                print ("An error occurred with the replies...")
+                print ("Child: An error occurred with the replies...")
                 sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Delete_Dir ):
@@ -234,20 +234,12 @@ if __name__ == "__main__":
         s.bind(('', PORT))
         s.listen(5)
 
-    if SERVER == 1:
-        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-        s_server1.bind(("", SERVER1_PORT))
-        s_server1.listen(5)
+    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server1.bind(("", SERVER1_PORT))
+    s_server1.listen(5)
 
-    if SERVER == 2:
-        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-        s_server2.bind(("", SERVER2_PORT))
-        s_server2.listen(5)
-
-    if SERVER == 3:
-        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-        s_server3.bind(("", SERVER3_PORT))
-        s_server3.listen(5)
+    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
     def signal_handler(sig, frame):
         s.close()
@@ -295,24 +287,26 @@ if __name__ == "__main__":
                         if message.startswith( szasar.Command.Create_Dir ):
                             os.mkdir( os.path.join( FILES_PATH, message[4:] ) )
                             messages.append(message_id)
-                            print ("Appended to messages: " + message_id)
                             replies = []
 
                             s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
+                            print ("Sending message to server 2...")        
                             s_server2.connect( ('', SERVER2_PORT) )
                             s_server2.sendall(message_complete.encode())
                             s2_message = s_server2.recv(1024).decode()
+                            print ("Message received from server 2: " + s2_message)
                             replies.append(s2_message)
                             s_server2.close()
 
-                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            print ("Sending message to server 3...")       
                             s_server3.connect( ('', SERVER3_PORT) )
                             s_server3.sendall(message_complete.encode())
                             s3_message = s_server3.recv(1024).decode()
+                            print ("Message received from server 3: " + s3_message)
                             replies.append(s3_message)
                             s_server3.close()
-
-                            print ("Replies: " + str(replies))
 
                             if all(reply == 'OK' for reply in replies):
                                 dialog.sendall('OK'.encode())
@@ -325,15 +319,11 @@ if __name__ == "__main__":
         else:
             sockets = [s_server1]
             while True:
-                readable, writable, exceptional = select.select(sockets, [], [])
+                readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
                 for sock in readable:
                     (dialog, address) = sock.accept()
                     message_complete = dialog.recv(1024).decode()
-
-                    if message_complete == 'OK' or message_complete == 'ER':
-                        dialog.close()
-                        continue
 
                     message_split = message_complete.split('-')
                     message_id = message_split[0]
@@ -360,12 +350,13 @@ if __name__ == "__main__":
                                 dialog.close()
 
                             s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
                             s_server2.connect( ('', SERVER2_PORT) )
                             s_server2.sendall(message_complete.encode())
                             s2_message = s_server2.recv(1024).decode()
                             s_server2.close()
 
-                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
                             s_server3.connect( ('', SERVER3_PORT) )
                             s_server3.sendall(message_complete.encode())
                             s3_message = s_server3.recv(1024).decode()
