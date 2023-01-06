@@ -6,14 +6,16 @@ import szasar as szasar
 import select, queue, time, threading
 
 PORT = 6012
-SERVER_PORT = 6013
+SERVER1_PORT = 6013
+SERVER2_PORT = 6014
+SERVER3_PORT = 6015
 FILES_PATH = "files"
 MAX_FILE_SIZE = 10 * 1 << 20 # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
 USERS = ("anonimous", "sar", "sza")
 PASSWORDS = ("", "sar", "sza")
 PRIMARY = False
-NUM_SECONDARIES = 2
+SERVER = 2
 
 class State:
     Identification, Authentication, Main, Downloading, Uploading = range(5)
@@ -166,7 +168,7 @@ def session(s):
                     name = message[4:]
                     message = "{}{}\r\n".format('BRCT' + szasar.Command.Create_Dir, name)
                     s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                    s_server.connect( ('localhost', SERVER_PORT) )
+                    s_server.connect( ('localhost', SERVER1_PORT) )
                     s_server.send(message.encode("ascii"))
                     
                     reply = szasar.recvline( s_server ).decode( "ascii" )
@@ -231,25 +233,18 @@ def session(s):
             sendER( s )
 
     
-def sessionServers(s_server):
+def secondarySession(s_server):
     while True:
-        message = szasar.recvline( s ).decode( "ascii" )
+        message = szasar.recvline( s_server ).decode( "ascii" )
+
         if not message:
             return
 
-        if message.startswith( 'BRCT' ):
-            replies = []
-            message = message[4:]
-            s_server.sendall(message.encode("ascii"))
+        s_server.sendall(message.encode("ascii"))
 
-            while len(replies) < NUM_SECONDARIES:
-                reply = szasar.recvline( s_server ).decode( "ascii" )
-                replies.append(reply)
+        reply = szasar.recvline( s_server ).decode( "ascii" )
 
-            if all(reply == 'OK' for reply in replies):
-                sendOK( s_server )
-            else:
-                sendER( s_server )
+        print (reply)
 
 if __name__ == "__main__":
 
@@ -258,24 +253,31 @@ if __name__ == "__main__":
         s.bind(('', PORT))
         s.listen(5)
 
-        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-        s_server.bind(("", SERVER_PORT))
-        s_server.listen(5)
+    if SERVER == 1:
+        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+        s_server1.bind(("", SERVER1_PORT))
+        s_server1.listen(5)
 
-    else:
-        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-        s_server.connect( ('localhost', SERVER_PORT) )
+    if SERVER == 2:
+        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+        s_server2.bind(("", SERVER2_PORT))
+        s_server2.listen(5)
+
+    if SERVER == 3:
+        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+        s_server3.bind(("", SERVER3_PORT))
+        s_server3.listen(5)
 
     def signal_handler(sig, frame):
         s.close()
-        s_server.close()
+        s_server1.close()
         sys.exit(0)
     signal.signal(signal.SIGCHLD, signal_handler)
 
     while True:
         if PRIMARY:
             try:
-                readable, writable, exceptional = select.select([s, s_server], [], [], 0.5)
+                readable, writable, exceptional = select.select([s, s_server1], [], [], 0.5)
             except select.error:
                 continue
 
@@ -283,6 +285,16 @@ if __name__ == "__main__":
                 if sock == s:
                     (dialog, address) = s.accept()
                     print( "Cliente: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
+
+                    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                    s_server2.connect( ('', SERVER2_PORT) )
+
+                    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                    s_server3.connect( ('', SERVER3_PORT) )
+
+                    s_server2.sendall("El mensaje".encode())
+                    s_server3.sendall("El mensaje".encode())
+
                     if( os.fork() ):
                         dialog.close()
                     else:
@@ -291,18 +303,79 @@ if __name__ == "__main__":
                         dialog.close()
                         exit( 0 )
 
-                elif sock == s_server:
-                    (dialog_server, address_server) = s_server.accept()
-                    print( "Servidor: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
-                    if( os.fork() ):
-                        dialog_server.close()
-                    else:
-                        s_server.close()
-                        sessionServers(dialog_server)
-                        dialog_server.close()
-                        exit( 0 )
+                elif sock == s_server1: #Server (primary) taking request of the client will forward message here with socket connect and then broadcasts, waits for response from secondaries, then sends through the socket response and continues with client
+                    (dialog, address) = s_server1.accept()
+                    data = dialog.recv(1024)
+                    print ("Data received from {address} : {data}".format(address=address, data=data.decode()))
+                    dialog.close()
+
 
         else:
-            time.sleep(1.5)
-            print ("am secondary")
-            #session(s_server)
+            if SERVER == 1: #maybe only when receiving from primary, then connect to others, have to connect, send, receive, close
+
+                sockets = [s_server1] # should be only s_server1, as it only listens from there, then see msg and broadcast to the rest by connecting to the other 2 if not previously received, so it should be select.select([s_server1], [], []) then accept, then connect to the other 2 (how it is done up), then rec, send, then close
+                while True:
+                    readable, writable, exceptional = select.select(sockets, [], [])
+
+                    for sock in readable:
+                        (dialog, address) = sock.accept()
+                        message = szasar.recvline( sock ).decode( "ascii" )
+                        print('Received message: ', message)
+                        dialog.close()
+                        """
+                        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server2.connect( ('', SERVER2_PORT) )
+
+                        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server3.connect( ('', SERVER3_PORT) )
+                        """
+
+            elif SERVER == 2:
+
+                sockets = [s_server2]
+                while True:
+                    readable, writable, exceptional = select.select(sockets, [], [])
+
+                    for sock in readable:
+                        (dialog, address) = sock.accept()
+                        print ("Accepted connection from {address}".format(address=address))
+                        message = dialog.recv(1024)
+                        print('Received message: ', message.decode())
+                        dialog.close()
+
+                        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server1.connect( ('', SERVER1_PORT) )
+
+                        s_server1.sendall(message)
+                        s_server1.close()
+                        """
+                        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server1.connect( ('', SERVER1_PORT) )
+
+                        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server3.connect( ('', SERVER3_PORT) )
+                        """
+
+            elif SERVER == 3:
+                sockets = [s_server3]
+                while True:
+                    readable, writable, exceptional = select.select(sockets, [], [])
+
+                    for sock in readable:
+                        (dialog, address) = sock.accept()
+                        message = dialog.recv(1024)
+                        print('Received message: ', message.decode())
+                        dialog.close()
+
+                        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server1.connect( ('', SERVER1_PORT) )
+
+                        s_server1.sendall(message)
+                        s_server1.close()
+                        """
+                        s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server1.connect( ('', SERVER1_PORT) )
+
+                        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_server2.connect( ('', SERVER2_PORT) )
+                        """
