@@ -66,21 +66,14 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            filename, filesize = message[4:].split('?')
+            
+            filename, filesize = message[4:].split( "?" )
             filesize = int(filesize)
-            if filesize > MAX_FILE_SIZE:
-                sendER( s, 8 )
-                continue
-            svfs = os.statvfs( FILES_PATH )
-            if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
-                sendER( s, 9 )
-                continue
 
             print ("Entered message delivery...")
             s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
             s_server1.connect( ('', SERVER1_PORT) )
-
-            s_server1.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
             new_message = s_server1.recv(1024).decode()
             s_server1.close()
             print ("Child: message received: " + new_message + "")
@@ -99,30 +92,25 @@ def session(s):
             if state != State.Uploading:
                 sendER( s )
                 continue
+
             state = State.Main
-            try:
-                with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
-                    filedata = szasar.recvall( s, filesize )
-                    f.write( filedata )
-            except:
-                sendER( s, 10 )
+            filedata = szasar.recvall(s, filesize)
+
+            print ("Entered message delivery...")
+            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server1.connect( ('', SERVER1_PORT) )
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode() + '|'.encode() + filedata)
+            new_message = s_server1.recv(1024).decode()
+            s_server1.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
+                sendOK( s )
             else:
-                print ("Entered message delivery...")
-                s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                s_server1.connect( ('', SERVER1_PORT) )
-
-                s_server1.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
-                new_message = s_server1.recv(1024).decode()
-                s_server1.close()
-                print ("Child: message received: " + new_message + "")
-
-                if new_message == "OK":
-                    MESSAGE_ID += 1
-                    print ("Child: OK! Sending back to client...")
-                    sendOK( s )
-                else:
-                    print ("Child: An error occurred with the replies...")
-                    sendER( s, 12 )
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Delete ):
             if state != State.Main:
@@ -131,12 +119,23 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            try:
-                os.remove( os.path.join( FILES_PATH, message[4:] ) )
-            except:
-                sendER( s, 11 )
-            else:
+
+            print ("Entered message delivery...")
+            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server1.connect( ('', SERVER1_PORT) )
+
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server1.recv(1024).decode()
+            s_server1.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
                 sendOK( s )
+            else:
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Exit ):
             sendOK( s )
@@ -154,7 +153,7 @@ def session(s):
             s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
             s_server1.connect( ('', SERVER1_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
             new_message = s_server1.recv(1024).decode()
             s_server1.close()
             print ("Child: message received: " + new_message + "")
@@ -174,12 +173,23 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            try:
-                shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
-            except:
-                sendER( s, 13 )
-            else:
+
+            print ("Entered message delivery...")
+            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server1.connect( ('', SERVER1_PORT) )
+
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server1.recv(1024).decode()
+            s_server1.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
                 sendOK( s )
+            else:
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
         
         elif message.startswith( szasar.Command.Rename_File ):
             if state != State.Main:
@@ -188,13 +198,23 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            try:
-                oldname, newname = message[4:].split(' ')
-                os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
-            except:
-                sendER( s, 14 )
-            else:
+
+            print ("Entered message delivery...")
+            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server1.connect( ('', SERVER1_PORT) )
+
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server1.recv(1024).decode()
+            s_server1.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
                 sendOK( s )
+            else:
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Attr_Modified ):
             if state != State.Main:
@@ -203,15 +223,23 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            try:
-                filename, permissions, timestamp, atime = message[4:].split(' ')
-                perm_mask = oct(int(permissions) & 0o777)
-                os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
-                os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
-            except:
-                sendER( s, 2 )
-            else:
+
+            print ("Entered message delivery...")
+            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server1.connect( ('', SERVER1_PORT) )
+
+            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server1.recv(1024).decode()
+            s_server1.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
                 sendOK( s )
+            else:
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
         else:
             sendER( s )
 
@@ -300,9 +328,9 @@ if __name__ == "__main__":
 
                 elif sock == s_server1:
                     (dialog, address) = s_server1.accept()
-                    message_complete = dialog.recv(1024).decode()
+                    message_complete = dialog.recv(4096).decode()
 
-                    message_split = message_complete.split('-')
+                    message_split = message_complete.split('ç')
                     message_id = message_split[0]
                     message = message_split[1]
 
@@ -329,9 +357,9 @@ if __name__ == "__main__":
                             rBroadcastPrimary(dialog, message_complete)
 
                         elif message.startswith(szasar.Command.Upload2):
+                            filedata = message.split('|')[1]
                             with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
-                                filedata = szasar.recvall( dialog, filesize )
-                                f.write( filedata )
+                                f.write( filedata.encode("ascii") )
                             messages.append(message_id)
 
                             rBroadcastPrimary(dialog, message_complete)
@@ -371,9 +399,9 @@ if __name__ == "__main__":
 
                 for sock in readable:
                     (dialog, address) = sock.accept()
-                    message_complete = dialog.recv(1024).decode()
+                    message_complete = dialog.recv(4096).decode()
 
-                    message_split = message_complete.split('-')
+                    message_split = message_complete.split('ç')
                     message_id = message_split[0]
                     message = message_split[1]
 
@@ -421,10 +449,10 @@ if __name__ == "__main__":
                             rBroadcast(message_complete)
 
                         elif message.startswith(szasar.Command.Upload2):
+                            filedata = message.split('|')[1]
                             try:
                                 with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
-                                    filedata = szasar.recvall( dialog, filesize )
-                                    f.write( filedata )
+                                    f.write( filedata.encode("ascii") )
                             except:
                                 dialog.sendall('ER'.encode())
                                 dialog.close()
