@@ -59,49 +59,6 @@ def session(s):
                 sendER( s, 3 )
                 state = State.Identification
 
-        elif message.startswith( szasar.Command.List ):
-            if state != State.Main:
-                sendER( s )
-                continue
-            try:
-                message = "OK\r\n"
-                for filename in os.listdir( FILES_PATH ):
-                    filesize = os.path.getsize( os.path.join( FILES_PATH, filename ) )
-                    message += "{}?{}\r\n".format( filename, filesize )
-                message += "\r\n"
-            except:
-                sendER( s, 4 )
-            else:
-                s.sendall( message.encode( "ascii" ) )
-
-        elif message.startswith( szasar.Command.Download ):
-            if state != State.Main:
-                sendER( s )
-                continue
-            filename = os.path.join( FILES_PATH, message[4:] )
-            try:
-                filesize = os.path.getsize( filename )
-            except:
-                sendER( s, 5 )
-                continue
-            else:
-                sendOK( s, filesize )
-                state = State.Downloading
-
-        elif message.startswith( szasar.Command.Download2 ):
-            if state != State.Downloading:
-                sendER( s )
-                continue
-            state = State.Main
-            try:
-                with open( filename, "rb" ) as f:
-                    filedata = f.read()
-            except:
-                sendER( s, 6 )
-            else:
-                sendOK( s )
-                s.sendall( filedata )
-
         elif message.startswith( szasar.Command.Upload ):
             if state != State.Main:
                 sendER( s )
@@ -118,7 +75,24 @@ def session(s):
             if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
                 sendER( s, 9 )
                 continue
-            sendOK( s )
+
+            print ("Entered message delivery...")
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
+
+            s_server2.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
+            print ("Child: message received: " + new_message + "")
+
+            if new_message == "OK":
+                MESSAGE_ID += 1
+                print ("Child: OK! Sending back to client...")
+                sendOK( s )
+            else:
+                print ("Child: An error occurred with the replies...")
+                sendER( s, 12 )
+
             state = State.Uploading
 
         elif message.startswith( szasar.Command.Upload2 ):
@@ -133,7 +107,22 @@ def session(s):
             except:
                 sendER( s, 10 )
             else:
-                sendOK( s )
+                print ("Entered message delivery...")
+                s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                s_server2.connect( ('', SERVER2_PORT) )
+
+                s_server2.sendall(str(MESSAGE_ID).encode() + '-'.encode() + message.encode())
+                new_message = s_server2.recv(1024).decode()
+                s_server2.close()
+                print ("Child: message received: " + new_message + "")
+
+                if new_message == "OK":
+                    MESSAGE_ID += 1
+                    print ("Child: OK! Sending back to client...")
+                    sendOK( s )
+                else:
+                    print ("Child: An error occurred with the replies...")
+                    sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Delete ):
             if state != State.Main:
@@ -226,6 +215,50 @@ def session(s):
         else:
             sendER( s )
 
+def rBroadcast(message_complete):
+    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
+    print ("Sending message to server1...")
+    s_server1.connect( ('', SERVER1_PORT) )
+    s_server1.sendall(message_complete.encode())
+    s1_message = s_server1.recv(1024).decode()
+    print ("Message received from server1: " + s1_message)
+    s_server1.close()
+
+    print ("Sending message to server3...")
+    s_server3.connect( ('', SERVER3_PORT) )
+    s_server3.sendall(message_complete.encode())
+    s_server3.close()
+
+def rBroadcastPrimary(dialog, message_complete):
+    replies = []
+
+    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
+    print ("Sending message to server 1...")        
+    s_server1.connect( ('', SERVER1_PORT) )
+    s_server1.sendall(message_complete.encode())
+    s1_message = s_server1.recv(1024).decode()
+    print ("Message received from server 1: " + s1_message)
+    replies.append(s1_message)
+    s_server1.close()
+
+    print ("Sending message to server 3...")       
+    s_server3.connect( ('', SERVER3_PORT) )
+    s_server3.sendall(message_complete.encode())
+    s3_message = s_server3.recv(1024).decode()
+    print ("Message received from server 3: " + s3_message)
+    replies.append(s3_message)
+    s_server3.close()
+
+    if all(reply == 'OK' for reply in replies):
+        dialog.sendall('OK'.encode())
+        dialog.close()
+    else:
+        dialog.sendall('ER'.encode())
+        dialog.close()
 
 if __name__ == "__main__":
 
@@ -284,32 +317,52 @@ if __name__ == "__main__":
                         if message.startswith( szasar.Command.Create_Dir ):
                             os.mkdir( os.path.join( FILES_PATH, message[4:] ) )
                             messages.append(message_id)
-                            print ("Appended to messages: " + message_id)
-                            replies = []
 
-                            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            rBroadcastPrimary(dialog, message_complete)
+
+                        elif message.startswith(szasar.Command.Upload):
+                            filename, filesize = message[4:].split('?')
+                            filesize = int(filesize)
+                            svfs = os.statvfs( FILES_PATH )
+                            messages.append(message_id)
+
+                            rBroadcastPrimary(dialog, message_complete)
+
+                        elif message.startswith(szasar.Command.Upload2):
+                            with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
+                                filedata = szasar.recvall( dialog, filesize )
+                                f.write( filedata )
+                            messages.append(message_id)
+
+                            rBroadcastPrimary(dialog, message_complete)
+
+                        elif message.startswith(szasar.Command.Delete):
+                            os.remove( os.path.join( FILES_PATH, message[4:] ) )
+                            messages.append(message_id)
+
+                            rBroadcastPrimary(dialog, message_complete)
                             
-                            s_server1.connect( ('', SERVER1_PORT) )
-                            s_server1.sendall(message_complete.encode())
-                            s1_message = s_server1.recv(1024).decode()
-                            replies.append(s1_message)
-                            s_server1.close()
+                        elif message.startswith(szasar.Command.Delete_Dir):
+                            shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
+                            messages.append(message_id)
 
-                            s_server3.connect( ('', SERVER3_PORT) )
-                            s_server3.sendall(message_complete.encode())
-                            s3_message = s_server3.recv(1024).decode()
-                            replies.append(s3_message)
-                            s_server3.close()
+                            rBroadcastPrimary(dialog, message_complete)
 
-                            print ("Replies: " + str(replies))
+                        elif message.startswith(szasar.Command.Rename_File):
+                            oldname, newname = message[4:].split(' ')
+                            os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
+                            messages.append(message_id)
 
-                            if all(reply == 'OK' for reply in replies):
-                                dialog.sendall('OK'.encode())
-                                dialog.close()
-                            else:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
+                            rBroadcastPrimary(dialog, message_complete)
+
+                        elif message.startswith(szasar.Command.Attr_Modified):
+                            filename, permissions, timestamp, atime = message[4:].split(' ')
+                            perm_mask = oct(int(permissions) & 0o777)
+                            os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
+                            os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
+                            messages.append(message_id)
+
+                            rBroadcastPrimary(dialog, message_complete)
 
 
         else:
@@ -339,22 +392,102 @@ if __name__ == "__main__":
                             except:
                                 dialog.sendall('ER'.encode())
                                 dialog.close()
+                                continue
                             else:
                                 messages.append(message_id)
+                                print ("Appended to messages: " + message_id)
                                 dialog.sendall('OK'.encode())
                                 dialog.close()
 
-                            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                            s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                                rBroadcast(message_complete)
 
-                            print ("Sending message to server1...")
-                            s_server1.connect( ('', SERVER1_PORT) )
-                            s_server1.sendall(message_complete.encode())
-                            s1_message = s_server1.recv(1024).decode()
-                            print ("Message received from server1: " + s1_message)
-                            s_server1.close()
+                        elif message.startswith(szasar.Command.Upload):
+                            filename, filesize = message[4:].split('?')
+                            filesize = int(filesize)
 
-                            print ("Sending message to server3...")
-                            s_server3.connect( ('', SERVER3_PORT) )
-                            s_server3.sendall(message_complete.encode())
-                            s_server3.close()
+                            if filesize > MAX_FILE_SIZE:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                                continue
+
+                            svfs = os.statvfs( FILES_PATH )
+                            if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                                continue
+
+                            messages.append(message_id)
+                            dialog.sendall('OK'.encode())
+                            dialog.close()
+                            rBroadcast(message_complete)
+
+                        elif message.startswith(szasar.Command.Upload2):
+                            try:
+                                with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
+                                    filedata = szasar.recvall( dialog, filesize )
+                                    f.write( filedata )
+                            except:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                            else:
+                                dialog.sendall('OK'.encode())
+                                dialog.close()
+                                messages.append(message_id)
+
+                                rBroadcast(message_complete)
+
+                        elif message.startswith(szasar.Command.Delete):
+                            try:
+                                os.remove( os.path.join( FILES_PATH, message[4:] ) )
+                            except:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                            else:
+                                dialog.sendall('OK'.encode())
+                                dialog.close()
+                                messages.append(message_id)
+
+                                rBroadcast(message_complete)
+                            
+                        elif message.startswith(szasar.Command.Delete_Dir):
+                            try:
+                                shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
+                            except:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                            else:
+                                dialog.sendall('OK'.encode())
+                                dialog.close()
+                                messages.append(message_id)
+
+                                rBroadcast(message_complete)
+
+                        elif message.startswith(szasar.Command.Rename_File):
+                            try:
+                                oldname, newname = message[4:].split(' ')
+                                os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
+                            except:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                            else:
+                                dialog.sendall('OK'.encode())
+                                dialog.close()
+                                messages.append(message_id)
+
+                                rBroadcast(message_complete)
+
+                        elif message.startswith(szasar.Command.Attr_Modified):
+                            try:
+                                filename, permissions, timestamp, atime = message[4:].split(' ')
+                                perm_mask = oct(int(permissions) & 0o777)
+                                os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
+                                os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
+                            except:
+                                dialog.sendall('ER'.encode())
+                                dialog.close()
+                            else:
+                                dialog.sendall('OK'.encode())
+                                dialog.close()
+                                messages.append(message_id)
+
+                                rBroadcast(message_complete)
