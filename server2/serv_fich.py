@@ -14,8 +14,8 @@ MAX_FILE_SIZE = 10 * 1 << 20 # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
 USERS = ("anonimous", "sar", "sza")
 PASSWORDS = ("", "sar", "sza")
-PRIMARY = True
-SERVER = 1
+PRIMARY = False
+SERVER = 2
 MESSAGE_ID = 0
 
 class State:
@@ -66,16 +66,17 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-            
+
             filename, filesize = message[4:].split( "?" )
             filesize = int(filesize)
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
+
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -92,16 +93,15 @@ def session(s):
             if state != State.Uploading:
                 sendER( s )
                 continue
-
             state = State.Main
             filedata = szasar.recvall(s, filesize)
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode() + '|'.encode() + filedata)
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -121,12 +121,12 @@ def session(s):
                 continue
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -150,20 +150,20 @@ def session(s):
                 continue
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
-            print ("Child: message received: " + new_message + "")
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
+            print ("New message received: " + new_message + "")
 
             if new_message == "OK":
                 MESSAGE_ID += 1
-                print ("Child: OK! Sending back to client...")
+                print ("OK! Sending back to client...")
                 sendOK( s )
             else:
-                print ("Child: An error occurred with the replies...")
+                print ("An error occurred with the replies...")
                 sendER( s, 12 )
 
         elif message.startswith( szasar.Command.Delete_Dir ):
@@ -175,12 +175,12 @@ def session(s):
                 continue
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -200,12 +200,12 @@ def session(s):
                 continue
 
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -223,14 +223,14 @@ def session(s):
             if user == 0:
                 sendER( s, 7 )
                 continue
-
+            
             print ("Entered message delivery...")
-            s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-            s_server1.connect( ('', SERVER1_PORT) )
+            s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+            s_server2.connect( ('', SERVER2_PORT) )
 
-            s_server1.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
-            new_message = s_server1.recv(1024).decode()
-            s_server1.close()
+            s_server2.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            new_message = s_server2.recv(1024).decode()
+            s_server2.close()
             print ("Child: message received: " + new_message + "")
 
             if new_message == "OK":
@@ -244,14 +244,17 @@ def session(s):
             sendER( s )
 
 def rBroadcast(message_complete):
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
     s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s2_message = s_server2.recv(1024).decode()
-    s_server2.close()
+    print ("Sending message to server1...")
+    s_server1.connect( ('', SERVER1_PORT) )
+    s_server1.sendall(message_complete.encode())
+    s1_message = s_server1.recv(1024).decode()
+    print ("Message received from server1: " + s1_message)
+    s_server1.close()
 
+    print ("Sending message to server3...")
     s_server3.connect( ('', SERVER3_PORT) )
     s_server3.sendall(message_complete.encode())
     s_server3.close()
@@ -259,16 +262,16 @@ def rBroadcast(message_complete):
 def rBroadcastPrimary(dialog, message_complete):
     replies = []
 
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
     s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    print ("Sending message to server 2...")        
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s2_message = s_server2.recv(1024).decode()
-    print ("Message received from server 2: " + s2_message)
-    replies.append(s2_message)
-    s_server2.close()
+    print ("Sending message to server 1...")        
+    s_server1.connect( ('', SERVER1_PORT) )
+    s_server1.sendall(message_complete.encode())
+    s1_message = s_server1.recv(1024).decode()
+    print ("Message received from server 1: " + s1_message)
+    replies.append(s1_message)
+    s_server1.close()
 
     print ("Sending message to server 3...")       
     s_server3.connect( ('', SERVER3_PORT) )
@@ -292,16 +295,13 @@ if __name__ == "__main__":
         s.bind(('', PORT))
         s.listen(5)
 
-    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server1.bind(("", SERVER1_PORT))
-    s_server1.listen(5)
-
     s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server2.bind(("", SERVER2_PORT))
+    s_server2.listen(5)
 
     def signal_handler(sig, frame):
         s.close()
-        s_server1.close()
+        s_server2.close()
         sys.exit(0)
     signal.signal(signal.SIGCHLD, signal_handler)
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     while True:
         if PRIMARY:
             try:
-                readable, writable, exceptional = select.select([s, s_server1], [], [], 0.5)
+                readable, writable, exceptional = select.select([s, s_server2], [], [], 0.5)
             except select.error:
                 continue
 
@@ -326,15 +326,15 @@ if __name__ == "__main__":
                         dialog.close()
                         exit( 0 )
 
-                elif sock == s_server1:
-                    (dialog, address) = s_server1.accept()
+                elif sock == s_server2:
+                    (dialog, address) = s_server2.accept()
                     message_complete = dialog.recv(4096).decode()
 
                     message_split = message_complete.split('ç')
                     message_id = message_split[0]
                     message = message_split[1]
 
-                    print ("Message received in socket server1: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
+                    print ("Message received in socket server2: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
 
                     if message_id in messages:
                         print ("Message already received. Sending OK...")
@@ -392,8 +392,9 @@ if __name__ == "__main__":
 
                             rBroadcastPrimary(dialog, message_complete)
 
+
         else:
-            sockets = [s_server1]
+            sockets = [s_server2]
             while True:
                 readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
@@ -405,7 +406,7 @@ if __name__ == "__main__":
                     message_id = message_split[0]
                     message = message_split[1]
 
-                    print ("Message received in socket server1: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
+                    print ("Message received in socket server2: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
 
                     if message_id in messages:
                         print ("Message already received. Sending OK...")
