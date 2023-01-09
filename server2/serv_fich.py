@@ -36,6 +36,8 @@ def sendER( s, code=1 ):
 def session(s):
     state = State.Identification
     global MESSAGE_ID
+    state = State.Main
+    user = "sar"
 
     while True:
 
@@ -425,32 +427,38 @@ if __name__ == "__main__":
         else:
             sockets = [s_server2, s_server2hb]
             while True:
-                print ("----------------------------------" + str(timeout) + "----------------------------------")
-                timeout -= 1
-                if timeout < 1 and not CANDIDATE:
-                    S1_DOWN = True
-                    CONNECTED = False
-                    print ("Sending message to server 3...")
-                    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
-                    s_server3.connect( ('', SERVER3_PORT) )
-                    s_server3.sendall(str(CHALLENGE_MSG_ID).encode() + 'ç'.encode() + str(SERVER).encode())
-                    s_server3.close()
-                    CHALLENGE_MSG_ID -= 1
-                    timeout = 15
+                if CONNECTED:
+                    print ("----------------------------------" + str(timeout) + "----------------------------------")
+                    timeout -= 1
+                    if timeout < 1 and not CANDIDATE:
+                        S1_DOWN = True
+                        CANDIDATE = True
+                        CONNECTED = False
+                        print ("Sending message to server 3...")
+                        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
+                        s_server3.connect( ('', SERVER3HEARTBEAT_PORT) )
+                        s_server3.sendall(str(SERVER).encode())
+                        s_server3.close()
+                        CHALLENGE_MSG_ID -= 1
+                        timeout = 10
 
-                if timeout < 1 and CANDIDATE:
-                    CONNECTED = False
-                    s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                    s.bind(('', PORT))
-                    s.listen(5)
-                    PRIMARY = True
-                    break
+                    if timeout < 1 and CANDIDATE:
+                        print ("Became Primary")
+                        CONNECTED = True
+                        s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s.bind(('', PORT))
+                        s.listen(5)
+                        PRIMARY = True
+                        break
 
                 readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
                 for sock in readable:
                     if sock == s_server2:
-                        timeout = 15
+
+                        if not CANDIDATE:
+                            timeout = 15
+
                         (dialog, address) = sock.accept()
                         message_complete = dialog.recv(4096).decode()
 
@@ -460,13 +468,7 @@ if __name__ == "__main__":
 
                         print ("Message received in socket server2: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
 
-                        if int(message_id) < 0:
-                            if int(message) > SERVER:
-                                dialog.sendall(str(CHALLENGE_MSG_ID).encode() + 'ç'.encode() + 'OK'.encode())
-                                dialog.close()
-                            S1_DOWN = True
-                            break
-
+                        CONNECTED = True
                         if message_id in messages:
                             print ("Message already received. Sending OK...")
                             dialog.sendall('OK'.encode())
@@ -583,9 +585,22 @@ if __name__ == "__main__":
                                     messages.append(message_id)
 
                                     rBroadcast(message_complete)
+                            MESSAGE_ID += 1
 
                     elif sock == s_server2hb:
+                        CONNECTED = True
                         (dialog, address) = s_server2hb.accept()
                         message_complete = dialog.recv(4096).decode()
-                        print ("Heartbeat received...")
-                        timeout = 15
+
+                        if message_complete.startswith( 'HEARTBEAT' ):
+                            print ("Heartbeat received...")
+                            timeout = 15
+
+                        else:
+                            if int(message_complete) > SERVER:
+                                dialog.close()
+                                s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
+                                s_server3.connect( ('', SERVER3HEARTBEAT_PORT) )
+                                s_server3.sendall('OK'.encode())
+                                s_server3.close()
+                            S1_DOWN = True

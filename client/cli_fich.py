@@ -88,69 +88,43 @@ if __name__ == "__main__":
 	file_to_rename = ""
 
 	while True:
-		stdin = sys.stdin.readline().split()
-		event = stdin[0]
-		name = stdin[1]
+		try:
+			stdin = sys.stdin.readline().split()
+			event = stdin[0]
+			name = stdin[1]
 
-		if event == "DIR_CREATED":
-			message = "{}{}\r\n".format( szasar.Command.Create_Dir, name )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
+			if event == "DIR_CREATED":
+				message = "{}{}\r\n".format( szasar.Command.Create_Dir, name )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
 
-			if not iserror( message ):
-				print( "El directorio {} se ha creado correctamente.".format( name ) )
+				if not iserror( message ):
+					print( "El directorio {} se ha creado correctamente.".format( name ) )
 
-		elif event == "DIR_DELETED":
-			message = "{}{}\r\n".format( szasar.Command.Delete_Dir, name )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
+			elif event == "DIR_DELETED":
+				message = "{}{}\r\n".format( szasar.Command.Delete_Dir, name )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
 
-			if not iserror( message ):
-				print( "El directorio {} se ha eliminado correctamente.".format( name ) )
+				if not iserror( message ):
+					print( "El directorio {} se ha eliminado correctamente.".format( name ) )
 
-		elif event == "FILE_CREATED" or event == "FILE_MODIFIED":
-			if os.path.isfile("files/." + name + ".swp"):
-				continue
-			try:
-				filesize = os.path.getsize( "files/" + name )
-				with open( "files/" + name, "rb" ) as f:
-					filedata = f.read()
-					f.close()
-			except:
-				print( "No se ha podido acceder al fichero {}.".format( name ) )
-				continue
-
-			message = "{}{}?{}\r\n".format( szasar.Command.Upload, name, filesize )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-
-			if iserror( message ):
-				continue
-
-			message = "{}\r\n".format( szasar.Command.Upload2 )
-			s.sendall( message.encode( "ascii" ) )
-			s.sendall( filedata )
-			message = szasar.recvline( s ).decode( "ascii" )
-
-			if not iserror( message ):
-				print( "El fichero {} se ha enviado correctamente.".format( name ) )
-
-		elif event == "FILE_DELETED":
-			if name.startswith( "." ):
-				file_being_edited = name.split(".")[1]
-
+			elif event == "FILE_CREATED" or event == "FILE_MODIFIED":
+				if os.path.isfile("files/." + name + ".swp"):
+					continue
 				try:
-					filesize = os.path.getsize( "files/" + file_being_edited )
-					with open( "files/" + file_being_edited, "rb" ) as f:
+					filesize = os.path.getsize( "files/" + name )
+					with open( "files/" + name, "rb" ) as f:
 						filedata = f.read()
 						f.close()
 				except:
-					print( "No se ha podido acceder al fichero {}.".format( file_being_edited ) )
+					print( "No se ha podido acceder al fichero {}.".format( name ) )
 					continue
 
-				message = "{}{}?{}\r\n".format( szasar.Command.Upload, file_being_edited, filesize )
+				message = "{}{}?{}\r\n".format( szasar.Command.Upload, name, filesize )
 				s.sendall( message.encode( "ascii" ) )
 				message = szasar.recvline( s ).decode( "ascii" )
+				print (message)
 
 				if iserror( message ):
 					continue
@@ -161,86 +135,69 @@ if __name__ == "__main__":
 				message = szasar.recvline( s ).decode( "ascii" )
 
 				if not iserror( message ):
-					print( "El fichero {} se ha enviado correctamente.".format( file_being_edited ) )
+					print( "El fichero {} se ha enviado correctamente.".format( name ) )
 
-			message = "{}{}\r\n".format( szasar.Command.Delete, name )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if not iserror( message ):
-				print( "El fichero {} se ha borrado correctamente.".format( name ) )
+			elif event == "FILE_DELETED":
+				if name.startswith( "." ):
+					file_being_edited = name.split(".")[1]
 
-		elif event == "FILE_MOVED_FROM":
-			file_to_rename = name
+					try:
+						filesize = os.path.getsize( "files/" + file_being_edited )
+						with open( "files/" + file_being_edited, "rb" ) as f:
+							filedata = f.read()
+							f.close()
+					except:
+						print( "No se ha podido acceder al fichero {}.".format( file_being_edited ) )
+						continue
 
-		elif event == "FILE_MOVED_TO":
-			message = "{}{}\r\n".format( szasar.Command.Rename_File, file_to_rename + " " + name )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
+					message = "{}{}?{}\r\n".format( szasar.Command.Upload, file_being_edited, filesize )
+					s.sendall( message.encode( "ascii" ) )
+					message = szasar.recvline( s ).decode( "ascii" )
 
-			if not iserror( message ):
-				print( "El fichero {} se ha renombrado correctamente.".format( name ) )
-		
-		elif event == "FILE_ATTRIB_CHANGED":
-			status = os.stat( "files/" + name )
-			message = "{}{}\r\n".format( szasar.Command.Attr_Modified, name + " " + str( status.st_mode ) + " " + str( status.st_mtime ) + " " + str( status.st_atime ) )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
+					if iserror( message ):
+						continue
 
-			if not iserror( message ):
-				print( "Los atributos del fichero {} se ha actualizado correctamente.".format( name ) )
-	'''
-		option = Menu.menu()
+					message = "{}\r\n".format( szasar.Command.Upload2 )
+					s.sendall( message.encode( "ascii" ) )
+					s.sendall( filedata )
+					message = szasar.recvline( s ).decode( "ascii" )
 
-		if option == Menu.List:
-			message = "{}\r\n".format( szasar.Command.List )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if iserror( message ):
-				continue
-			filecount = 0
-			print( "Listado de ficheros disponibles" )
-			print( "-------------------------------" )
-			while True:
-				line = szasar.recvline( s ).decode("ascii")
-				if line:
-					filecount += 1
-					fileinfo = line.split( '?' )
-					print( "{:<20} {:>8}".format( fileinfo[0], int2bytes( int(fileinfo[1]) ) ) )
-				else:
-					break
-			print( "-------------------------------" )
-			if filecount == 0:
-				print( "No hay ficheros disponibles." )
-			else:
-				plural = "s" if filecount > 1 else ""
-				print( "{0} fichero{1} disponible{1}.".format( filecount, plural ) )
+					if not iserror( message ):
+						print( "El fichero {} se ha enviado correctamente.".format( file_being_edited ) )
 
-		elif option == Menu.Download:
-			filename = input( "Indica el fichero que quieres bajar: " )
-			message = "{}{}\r\n".format( szasar.Command.Download, filename )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode ("ascii" )
-			if iserror( message ):
-				continue
-			filesize = int( message[2:] )
-			message = "{}\r\n".format( szasar.Command.Download2 )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			if iserror( message ):
-				continue
-			filedata = szasar.recvall( s, filesize )
-			try:
-				with open( filename, "wb" ) as f:
-					f.write( filedata )
-			except:
-				print( "No se ha podido guardar el fichero en disco." )
-			else:
-				print( "El fichero {} se ha descargado correctamente.".format( filename ) )
+				message = "{}{}\r\n".format( szasar.Command.Delete, name )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
+				if not iserror( message ):
+					print( "El fichero {} se ha borrado correctamente.".format( name ) )
 
-		elif option == Menu.Exit:
-			message = "{}\r\n".format( szasar.Command.Exit )
-			s.sendall( message.encode( "ascii" ) )
-			message = szasar.recvline( s ).decode( "ascii" )
-			break
-	'''
-	s.close()
+			elif event == "FILE_MOVED_FROM":
+				file_to_rename = name
+
+			elif event == "FILE_MOVED_TO":
+				message = "{}{}\r\n".format( szasar.Command.Rename_File, file_to_rename + " " + name )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
+
+				if not iserror( message ):
+					print( "El fichero {} se ha renombrado correctamente.".format( name ) )
+			
+			elif event == "FILE_ATTRIB_CHANGED":
+				status = os.stat( "files/" + name )
+				message = "{}{}\r\n".format( szasar.Command.Attr_Modified, name + " " + str( status.st_mode ) + " " + str( status.st_mtime ) + " " + str( status.st_atime ) )
+				s.sendall( message.encode( "ascii" ) )
+				message = szasar.recvline( s ).decode( "ascii" )
+
+				if not iserror( message ):
+					print( "Los atributos del fichero {} se ha actualizado correctamente.".format( name ) )
+
+		except ConnectionRefusedError:
+			s.close()
+			s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+			s.connect( (SERVER, PORT) )
+
+		except EOFError:
+			s.close()
+			s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+			s.connect( (SERVER, PORT) )
+

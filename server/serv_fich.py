@@ -308,10 +308,11 @@ if __name__ == "__main__":
     s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
     def signal_handler(sig, frame):
+        print ("Closing server...")
         s.close()
         s_server1.close()
         sys.exit(0)
-    signal.signal(signal.SIGCHLD, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
     messages = []
     heartbeat = 5
