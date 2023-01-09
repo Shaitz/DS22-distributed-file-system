@@ -22,8 +22,10 @@ CANDIDATE = False
 SERVER = 2
 MESSAGE_ID = 0
 CHALLENGE_MSG_ID = -1
-S1_DOWN = False
-
+WHO_PRIMARY = SERVER1_PORT
+SERVERS = [SERVER1_PORT, SERVER3_PORT]
+SERVERS_HEARTBEAT = [SERVER1HEARTBEAT_PORT, SERVER3HEARTBEAT_PORT]
+PORTS = {SERVER1_PORT : SERVER1HEARTBEAT_PORT, SERVER2_PORT : SERVER2HEARTBEAT_PORT, SERVER3_PORT : SERVER3HEARTBEAT_PORT}
 class State:
     Identification, Authentication, Main, Downloading, Uploading = range(5)
 
@@ -253,42 +255,25 @@ def session(s):
             sendER( s )
 
 def rBroadcast(message_complete):
-    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    for i in range (len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    if not S1_DOWN:
-        print ("Sending message to server1...")
-        s_server1.connect( ('', SERVER1_PORT) )
-        s_server1.sendall(message_complete.encode())
-        s1_message = s_server1.recv(1024).decode()
-        print ("Message received from server1: " + s1_message)
-        s_server1.close()
-
-    print ("Sending message to server3...")
-    s_server3.connect( ('', SERVER3_PORT) )
-    s_server3.sendall(message_complete.encode())
-    s_server3.close()
+        print ("Sending message to server " + str(SERVERS[i]) + "...")
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_server.close()
 
 def rBroadcastPrimary(dialog, message_complete):
     replies = []
-
-    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-
-    if not S1_DOWN:
-        print ("Sending message to server 1...")        
-        s_server1.connect( ('', SERVER1_PORT) )
-        s_server1.sendall(message_complete.encode())
-        s_server1.close()
-    replies.append('OK')
-
-    print ("Sending message to server 3...")       
-    s_server3.connect( ('', SERVER3_PORT) )
-    s_server3.sendall(message_complete.encode())
-    s3_message = s_server3.recv(1024).decode()
-    print ("Message received from server 3: " + s3_message)
-    replies.append(s3_message)
-    s_server3.close()
+    for i in range(len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+        print ("Sending message to server " + str(SERVERS[i]))        
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_message = s_server.recv(1024).decode()
+        print ("Message received from server: " + s_message)
+        replies.append(s_message)
+        s_server.close()
 
     if dialog != 0:
         if all(reply == 'OK' for reply in replies):
@@ -331,10 +316,11 @@ if __name__ == "__main__":
                 heartbeat = 5
                 print ("Sending heartbeat...")
                 message = 'HEARTBEAT'
-                s_server3hb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                s_server3hb.connect( ('', SERVER3HEARTBEAT_PORT) )
-                s_server3hb.sendall(message.encode())
-                s_server3hb.close()
+                for server in SERVERS_HEARTBEAT:
+                    s_serverhb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                    s_serverhb.connect( ('', server) )
+                    s_serverhb.sendall(message.encode())
+                    s_serverhb.close()
 
         if PRIMARY:
             try:
@@ -431,20 +417,35 @@ if __name__ == "__main__":
                     print ("----------------------------------" + str(timeout) + "----------------------------------")
                     timeout -= 1
                     if timeout < 1 and not CANDIDATE:
-                        S1_DOWN = True
+                        SERVERS.remove(WHO_PRIMARY)
+                        SERVERS_HEARTBEAT.remove(PORTS[WHO_PRIMARY])
+                        WHO_PRIMARY = 0
                         CANDIDATE = True
                         CONNECTED = False
-                        print ("Sending message to server 3...")
-                        s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
-                        s_server3.connect( ('', SERVER3HEARTBEAT_PORT) )
-                        s_server3.sendall(str(SERVER).encode())
-                        s_server3.close()
+                        print ("Sending CHALLENGE message to rest of the servers...")
+
+                        for server in SERVERS_HEARTBEAT:
+                            s_server3a = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server3a.connect( ('', server) )
+                            s_server3a.sendall(str(SERVER).encode() + '?'.encode() + str(SERVER2HEARTBEAT_PORT).encode())
+                            s_server3a.close()
+
                         CHALLENGE_MSG_ID -= 1
                         timeout = 10
 
                     if timeout < 1 and CANDIDATE:
                         print ("Became Primary")
+                        WHO_PRIMARY = SERVER2_PORT
                         CONNECTED = True
+
+                        for i in range (len(SERVERS_HEARTBEAT)):
+                            s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
+                            print ("Sending winner message to server " + str(SERVERS[i]) + "...")
+                            s_server.connect( ('', SERVERS_HEARTBEAT[i]) )
+                            s_server.sendall('LEADER?'.encode() + str(SERVER2_PORT).encode())
+                            s_server.close()
+
                         s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
                         s.bind(('', PORT))
                         s.listen(5)
@@ -596,11 +597,23 @@ if __name__ == "__main__":
                             print ("Heartbeat received...")
                             timeout = 15
 
+                        elif message_complete.startswith( 'LEADER' ):
+                            message_split = message_complete.split('?')
+                            message = message_split[1]
+
+                            timeout = 15
+                            WHO_PRIMARY = int(message)
+                            CANDIDATE = False
+                            dialog.close()
+
                         else:
-                            if int(message_complete) > SERVER:
+                            message_split = message_complete.split('?')
+                            message_server = message_split[0]
+                            message_hbport = message_split[1]
+
+                            if int(message_server) > SERVER:
                                 dialog.close()
                                 s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
-                                s_server3.connect( ('', SERVER3HEARTBEAT_PORT) )
+                                s_server3.connect( ('', int(message_hbport)) )
                                 s_server3.sendall('OK'.encode())
                                 s_server3.close()
-                            S1_DOWN = True

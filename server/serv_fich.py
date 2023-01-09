@@ -20,7 +20,9 @@ PASSWORDS = ("", "sar", "sza")
 PRIMARY = True
 SERVER = 1
 MESSAGE_ID = 0
-
+WHO_PRIMARY = SERVER1_PORT
+SERVERS = [SERVER2_PORT, SERVER3_PORT]
+SERVERS_HEARTBEAT = [SERVER2HEARTBEAT_PORT, SERVER3HEARTBEAT_PORT]
 class State:
     Identification, Authentication, Main, Downloading, Uploading = range(5)
 
@@ -247,39 +249,26 @@ def session(s):
             sendER( s )
 
 def rBroadcast(message_complete):
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    for i in range (len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s2_message = s_server2.recv(1024).decode()
-    s_server2.close()
-
-    s_server3.connect( ('', SERVER3_PORT) )
-    s_server3.sendall(message_complete.encode())
-    s_server3.close()
+        print ("Sending message to server " + str(SERVERS[i]) + "...")
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_server.close()
 
 def rBroadcastPrimary(dialog, message_complete):
     replies = []
+    for i in range(len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-
-    print ("Sending message to server 2...")        
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s2_message = s_server2.recv(1024).decode()
-    print ("Message received from server 2: " + s2_message)
-    replies.append(s2_message)
-    s_server2.close()
-
-    print ("Sending message to server 3...")       
-    s_server3.connect( ('', SERVER3_PORT) )
-    s_server3.sendall(message_complete.encode())
-    s3_message = s_server3.recv(1024).decode()
-    print ("Message received from server 3: " + s3_message)
-    replies.append(s3_message)
-    s_server3.close()
+        print ("Sending message to server " + str(SERVERS[i]))        
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_message = s_server.recv(1024).decode()
+        print ("Message received from server: " + s_message)
+        replies.append(s_message)
+        s_server.close()
 
     if dialog != 0:
         if all(reply == 'OK' for reply in replies):
@@ -326,15 +315,11 @@ if __name__ == "__main__":
                     heartbeat = 5
                     print ("Sending heartbeat...")
                     message = 'HEARTBEAT'
-
-                    s_server2hb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                    s_server3hb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                    s_server2hb.connect( ('', SERVER2HEARTBEAT_PORT) )
-                    s_server2hb.sendall(message.encode())
-                    s_server2hb.close()
-                    s_server3hb.connect( ('', SERVER3HEARTBEAT_PORT) )
-                    s_server3hb.sendall(message.encode())
-                    s_server3hb.close()
+                    for server in SERVERS_HEARTBEAT:
+                        s_serverhb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_serverhb.connect( ('', server) )
+                        s_serverhb.sendall(message.encode())
+                        s_serverhb.close()
 
             try:
                 readable, writable, exceptional = select.select([s, s_server1, s_server1hb], [], [], 0.5)
