@@ -9,14 +9,20 @@ PORT = 6012
 SERVER1_PORT = 6013
 SERVER2_PORT = 6014
 SERVER3_PORT = 6015
+SERVER1HEARTBEAT_PORT = 6016
+SERVER2HEARTBEAT_PORT = 6017
+SERVER3HEARTBEAT_PORT = 6018
 FILES_PATH = "files"
 MAX_FILE_SIZE = 10 * 1 << 20 # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
 USERS = ("anonimous", "sar", "sza")
 PASSWORDS = ("", "sar", "sza")
 PRIMARY = False
+CANDIDATE = False
+CHALLENGE_MSG_ID = -1
 SERVER = 3
 MESSAGE_ID = 0
+S1_DOWN = False
 
 class State:
     Identification, Authentication, Main, Downloading, Uploading = range(5)
@@ -30,6 +36,8 @@ def sendER( s, code=1 ):
 def session(s):
     state = State.Identification
     global MESSAGE_ID
+    state = State.Main
+    user = "sar"
 
     while True:
         message = szasar.recvline( s ).decode( "ascii" )
@@ -246,13 +254,12 @@ def session(s):
 def rBroadcast(message_complete):
     s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
     s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                            
-    print ("Sending message to server1...")
-    s_server1.connect( ('', SERVER1_PORT) )
-    s_server1.sendall(message_complete.encode())
-    s1_message = s_server1.recv(1024).decode()
-    print ("Message received from server1: " + s1_message)
-    s_server1.close()
+
+    if not S1_DOWN:            
+        print ("Sending message to server1...")
+        s_server1.connect( ('', SERVER1_PORT) )
+        s_server1.sendall(message_complete.encode())
+        s_server1.close()
 
     print ("Sending message to server2...")
     s_server2.connect( ('', SERVER2_PORT) )
@@ -265,13 +272,15 @@ def rBroadcastPrimary(dialog, message_complete):
     s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
     s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    print ("Sending message to server 1...")        
-    s_server1.connect( ('', SERVER1_PORT) )
-    s_server1.sendall(message_complete.encode())
-    s1_message = s_server1.recv(1024).decode()
-    print ("Message received from server 1: " + s1_message)
-    replies.append(s1_message)
-    s_server1.close()
+    if not S1_DOWN:
+        print ("Sending message to server 1...")        
+        s_server1.connect( ('', SERVER1_PORT) )
+        s_server1.sendall(message_complete.encode())
+        s1_message = s_server1.recv(1024).decode()
+        print ("Message received from server 1: " + s1_message)
+        replies.append(s1_message)
+        s_server1.close()
+    replies.append('OK')
 
     print ("Sending message to server 2...")        
     s_server2.connect( ('', SERVER2_PORT) )
@@ -299,18 +308,31 @@ if __name__ == "__main__":
     s_server3.bind(("", SERVER3_PORT))
     s_server3.listen(5)
 
+    s_server3hb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    s_server3hb.bind(("", SERVER3HEARTBEAT_PORT))
+    s_server3hb.listen(5)   
+
     def signal_handler(sig, frame):
         s.close()
         s_server3.close()
         sys.exit(0)
     signal.signal(signal.SIGCHLD, signal_handler)
-
+    
+    CONNECTED = False
     messages = []
-
+    timeout = 15
     while True:
         if PRIMARY:
+            if CONNECTED:
+                heartbeat -= 1
+                if heartbeat < 1:
+                    heartbeat = 5
+                    print ("Sending heartbeat...")
+                    rBroadcast(str(MESSAGE_ID) + 'ç' + "HEARTBEAT")
+                    MESSAGE_ID += 1
+                    continue
             try:
-                readable, writable, exceptional = select.select([s, s_server3], [], [], 0.5)
+                readable, writable, exceptional = select.select([s, s_server3, s_server3hb], [], [], 0.5)
             except select.error:
                 continue
 
@@ -318,6 +340,7 @@ if __name__ == "__main__":
                 if sock == s:
                     (dialog, address) = s.accept()
                     print( "Cliente: Conexión aceptada del socket {0[0]}:{0[1]}.".format( address ) )
+                    CONNECTED = True
                     if( os.fork() ):
                         dialog.close()
                     else:
@@ -392,130 +415,186 @@ if __name__ == "__main__":
 
                             rBroadcastPrimary(dialog, message_complete)
 
+                elif sock == s_server3hb:
+                    (dialog, address) = s_server3hb.accept()
+                    message_complete = dialog.recv(4096).decode()
+                    timeout = 15
+
 
         else:
-            sockets = [s_server3]
+            sockets = [s_server3, s_server3hb]
             while True:
+                if CONNECTED:
+                    print ("----------------------------------" + str(timeout) + "----------------------------------")
+                    timeout -= 1
+                    if timeout < 1 and not CANDIDATE:
+                        CANDIDATE = True
+                        S1_DOWN = True
+                        CONNECTED = False
+                        print ("Sending message to server 2...")
+                        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
+                        s_server2.connect( ('', SERVER2HEARTBEAT_PORT) )
+                        s_server2.sendall(str(SERVER).encode())
+                        s_server2.close()
+                        CHALLENGE_MSG_ID -= 1
+                        timeout = 10
+
+                    if timeout < 1 and CANDIDATE:
+                        CONNECTED = True
+                        s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s.bind(('', PORT))
+                        s.listen(5)
+                        PRIMARY = True
+                        break
+
                 readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
                 for sock in readable:
-                    (dialog, address) = sock.accept()
-                    message_complete = dialog.recv(4096).decode()
+                    if sock == s_server3:
 
-                    message_split = message_complete.split('ç')
-                    message_id = message_split[0]
-                    message = message_split[1]
+                        if not CANDIDATE:
+                            timeout = 15
 
-                    print ("Message received in socket server3: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
+                        (dialog, address) = sock.accept()
+                        message_complete = dialog.recv(4096).decode()
 
-                    if message_id in messages:
-                        print ("Message already received. Sending OK...")
-                        dialog.sendall('OK'.encode())
-                        dialog.close()
+                        message_split = message_complete.split('ç')
+                        message_id = message_split[0]
+                        message = message_split[1]
 
-                    else:
-                        if message.startswith( szasar.Command.Create_Dir ):
-                            try:
-                                os.mkdir( os.path.join( FILES_PATH, message[4:] ) )
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                                continue
-                            else:
-                                messages.append(message_id)
-                                print ("Appended to messages: " + message_id)
-                                dialog.sendall('OK'.encode())
-                                dialog.close()
-
-                                rBroadcast(message_complete)
-
-                        elif message.startswith(szasar.Command.Upload):
-                            filename, filesize = message[4:].split('?')
-                            filesize = int(filesize)
-
-                            if filesize > MAX_FILE_SIZE:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                                continue
-
-                            svfs = os.statvfs( FILES_PATH )
-                            if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                                continue
-
-                            messages.append(message_id)
+                        print ("Message received in socket server3: " + message + " with id: " + message_id + ". Current messages: " + str(messages))
+                        
+                        CONNECTED = True
+                        if message_id in messages:
+                            print ("Message already received. Sending OK...")
                             dialog.sendall('OK'.encode())
                             dialog.close()
-                            rBroadcast(message_complete)
 
-                        elif message.startswith(szasar.Command.Upload2):
-                            filedata = message.split('|')[1]
-                            try:
-                                with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
-                                    f.write( filedata.encode("ascii") )
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                            else:
+                        else:
+                            if message.startswith( szasar.Command.Create_Dir ):
+                                try:
+                                    os.mkdir( os.path.join( FILES_PATH, message[4:] ) )
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                    continue
+                                else:
+                                    messages.append(message_id)
+                                    print ("Appended to messages: " + message_id)
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+
+                                    rBroadcast(message_complete)
+
+                            elif message.startswith(szasar.Command.Upload):
+                                filename, filesize = message[4:].split('?')
+                                filesize = int(filesize)
+
+                                if filesize > MAX_FILE_SIZE:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                    continue
+
+                                svfs = os.statvfs( FILES_PATH )
+                                if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                    continue
+
+                                messages.append(message_id)
                                 dialog.sendall('OK'.encode())
                                 dialog.close()
-                                messages.append(message_id)
-
                                 rBroadcast(message_complete)
 
-                        elif message.startswith(szasar.Command.Delete):
-                            try:
-                                os.remove( os.path.join( FILES_PATH, message[4:] ) )
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                            else:
+                            elif message.startswith(szasar.Command.Upload2):
+                                filedata = message.split('|')[1]
+                                try:
+                                    with open( os.path.join( FILES_PATH, filename), "wb" ) as f:
+                                        f.write( filedata.encode("ascii") )
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                else:
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+                                    messages.append(message_id)
+
+                                    rBroadcast(message_complete)
+
+                            elif message.startswith(szasar.Command.Delete):
+                                try:
+                                    os.remove( os.path.join( FILES_PATH, message[4:] ) )
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                else:
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+                                    messages.append(message_id)
+
+                                    rBroadcast(message_complete)
+                                
+                            elif message.startswith(szasar.Command.Delete_Dir):
+                                try:
+                                    shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                else:
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+                                    messages.append(message_id)
+
+                                    rBroadcast(message_complete)
+
+                            elif message.startswith(szasar.Command.Rename_File):
+                                try:
+                                    oldname, newname = message[4:].split(' ')
+                                    os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                else:
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+                                    messages.append(message_id)
+
+                                    rBroadcast(message_complete)
+
+                            elif message.startswith(szasar.Command.Attr_Modified):
+                                try:
+                                    filename, permissions, timestamp, atime = message[4:].split(' ')
+                                    perm_mask = oct(int(permissions) & 0o777)
+                                    os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
+                                    os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
+                                except:
+                                    dialog.sendall('ER'.encode())
+                                    dialog.close()
+                                else:
+                                    dialog.sendall('OK'.encode())
+                                    dialog.close()
+                                    messages.append(message_id)
+
+                                    rBroadcast(message_complete)
+
+                            MESSAGE_ID += 1
+
+                    elif sock == s_server3hb:
+                        CONNECTED = True
+                        (dialog, address) = s_server3hb.accept()
+                        message_complete = dialog.recv(4096).decode()
+
+                        if message_complete.startswith( 'HEARTBEAT' ):
+                            print ("Heartbeat received...")
+                            timeout = 15
+                            dialog.close()
+
+                        elif message_complete.startswith( 'OK' ):
+                            timeout = 15
+                            dialog.close()
+
+                        else:
+                            if int(message_complete) > SERVER:
                                 dialog.sendall('OK'.encode())
                                 dialog.close()
-                                messages.append(message_id)
-
-                                rBroadcast(message_complete)
-                            
-                        elif message.startswith(szasar.Command.Delete_Dir):
-                            try:
-                                shutil.rmtree( os.path.join( FILES_PATH, message[4:] ) )
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                            else:
-                                dialog.sendall('OK'.encode())
-                                dialog.close()
-                                messages.append(message_id)
-
-                                rBroadcast(message_complete)
-
-                        elif message.startswith(szasar.Command.Rename_File):
-                            try:
-                                oldname, newname = message[4:].split(' ')
-                                os.rename( os.path.join( FILES_PATH, oldname ), os.path.join( FILES_PATH, newname ) )
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                            else:
-                                dialog.sendall('OK'.encode())
-                                dialog.close()
-                                messages.append(message_id)
-
-                                rBroadcast(message_complete)
-
-                        elif message.startswith(szasar.Command.Attr_Modified):
-                            try:
-                                filename, permissions, timestamp, atime = message[4:].split(' ')
-                                perm_mask = oct(int(permissions) & 0o777)
-                                os.utime( os.path.join( FILES_PATH, filename ), ( float(atime), float(timestamp) ) )
-                                os.chmod( os.path.join( FILES_PATH, filename ), int(perm_mask, base=8))
-                            except:
-                                dialog.sendall('ER'.encode())
-                                dialog.close()
-                            else:
-                                dialog.sendall('OK'.encode())
-                                dialog.close()
-                                messages.append(message_id)
-
-                                rBroadcast(message_complete)
+                            S1_DOWN = True
