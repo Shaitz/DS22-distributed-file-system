@@ -300,10 +300,11 @@ if __name__ == "__main__":
     s_server3hb.listen(5)   
 
     def signal_handler(sig, frame):
+        print ("Closing server...")
         s.close()
         s_server3.close()
         sys.exit(0)
-    signal.signal(signal.SIGCHLD, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
     CONNECTED = False
     messages = []
@@ -416,24 +417,24 @@ if __name__ == "__main__":
         else:
             sockets = [s_server3, s_server3hb]
             while True:
-                print ("----------------------------------" + str(timeout) + "----------------------------------")
-                timeout -= 1
-                if timeout < 1 and not CANDIDATE:
-                    SERVERS.remove(WHO_PRIMARY)
-                    SERVERS_HEARTBEAT.remove(PORTS[WHO_PRIMARY])
-                    WHO_PRIMARY = 0
-                    CANDIDATE = True
-                    CONNECTED = False
-                    print ("Sending CHALLENGE message to rest of the servers...")
+                if CONNECTED:
+                    print ("----------------------------------" + str(timeout) + "----------------------------------")
+                    timeout -= 1
+                    if timeout < 1 and not CANDIDATE:
+                        SERVERS.remove(WHO_PRIMARY)
+                        SERVERS_HEARTBEAT.remove(PORTS[WHO_PRIMARY])
+                        WHO_PRIMARY = 0
+                        CANDIDATE = True
+                        print ("Sending CHALLENGE message to rest of the servers...")
 
-                    for server in SERVERS_HEARTBEAT:
-                        s_server3a = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                        s_server3a.connect( ('', server) )
-                        s_server3a.sendall(str(SERVER).encode() + '?'.encode() + str(SERVER3HEARTBEAT_PORT).encode())
-                        s_server3a.close()
+                        for server in SERVERS_HEARTBEAT:
+                            s_server3a = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server3a.connect( ('', server) )
+                            s_server3a.sendall(str(SERVER).encode() + '?'.encode() + str(SERVER3HEARTBEAT_PORT).encode())
+                            s_server3a.close()
 
-                    CHALLENGE_MSG_ID -= 1
-                    timeout = 10
+                        CHALLENGE_MSG_ID -= 1
+                        timeout = 10
 
                 if timeout < 1 and CANDIDATE:
                     print ("Became Primary")

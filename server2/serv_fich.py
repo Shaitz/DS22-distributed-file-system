@@ -299,10 +299,11 @@ if __name__ == "__main__":
     s_server2hb.listen(5)   
 
     def signal_handler(sig, frame):
+        print ("Closing server...")
         s.close()
         s_server2.close()
         sys.exit(0)
-    signal.signal(signal.SIGCHLD, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
     messages = []
     timeout = 15
