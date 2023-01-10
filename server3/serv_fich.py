@@ -22,8 +22,10 @@ CANDIDATE = False
 CHALLENGE_MSG_ID = -1
 SERVER = 3
 MESSAGE_ID = 0
-S1_DOWN = False
-
+WHO_PRIMARY = SERVER1_PORT
+SERVERS = [SERVER1_PORT, SERVER2_PORT]
+SERVERS_HEARTBEAT = [SERVER1HEARTBEAT_PORT, SERVER2HEARTBEAT_PORT]
+PORTS = {SERVER1_PORT : SERVER1HEARTBEAT_PORT, SERVER2_PORT : SERVER2HEARTBEAT_PORT, SERVER3_PORT : SERVER3HEARTBEAT_PORT}
 class State:
     Identification, Authentication, Main, Downloading, Uploading = range(5)
 
@@ -40,6 +42,7 @@ def session(s):
     user = "sar"
 
     while True:
+        
         message = szasar.recvline( s ).decode( "ascii" )
         if not message:
             return
@@ -107,7 +110,7 @@ def session(s):
             print ("Entered message delivery...")
             s_server3 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
             s_server3.connect( ('', SERVER3_PORT) )
-            s_server3.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode())
+            s_server3.sendall(str(MESSAGE_ID).encode() + 'ç'.encode() + message.encode() + '|'.encode() + filedata)
             new_message = s_server3.recv(1024).decode()
             s_server3.close()
             print ("New message received: " + new_message + "")
@@ -252,50 +255,34 @@ def session(s):
             sendER( s )
 
 def rBroadcast(message_complete):
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    for i in range (len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    if not S1_DOWN:            
-        print ("Sending message to server1...")
-        s_server1.connect( ('', SERVER1_PORT) )
-        s_server1.sendall(message_complete.encode())
-        s_server1.close()
-
-    print ("Sending message to server2...")
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s_server2.close()
+        print ("Sending message to server " + str(SERVERS[i]) + "...")
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_server.close()
 
 def rBroadcastPrimary(dialog, message_complete):
     replies = []
+    for i in range(len(SERVERS)):
+        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 
-    s_server1 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-    s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+        print ("Sending message to server " + str(SERVERS[i]))        
+        s_server.connect( ('', SERVERS[i]) )
+        s_server.sendall(message_complete.encode())
+        s_message = s_server.recv(1024).decode()
+        print ("Message received from server: " + s_message)
+        replies.append(s_message)
+        s_server.close()
 
-    if not S1_DOWN:
-        print ("Sending message to server 1...")        
-        s_server1.connect( ('', SERVER1_PORT) )
-        s_server1.sendall(message_complete.encode())
-        s1_message = s_server1.recv(1024).decode()
-        print ("Message received from server 1: " + s1_message)
-        replies.append(s1_message)
-        s_server1.close()
-    replies.append('OK')
-
-    print ("Sending message to server 2...")        
-    s_server2.connect( ('', SERVER2_PORT) )
-    s_server2.sendall(message_complete.encode())
-    s2_message = s_server2.recv(1024).decode()
-    print ("Message received from server 2: " + s2_message)
-    replies.append(s2_message)
-    s_server2.close()
-
-    if all(reply == 'OK' for reply in replies):
-        dialog.sendall('OK'.encode())
-        dialog.close()
-    else:
-        dialog.sendall('ER'.encode())
-        dialog.close()
+    if dialog != 0:
+        if all(reply == 'OK' for reply in replies):
+            dialog.sendall('OK'.encode())
+            dialog.close()
+        else:
+            dialog.sendall('ER'.encode())
+            dialog.close()
 
 if __name__ == "__main__":
 
@@ -313,14 +300,17 @@ if __name__ == "__main__":
     s_server3hb.listen(5)   
 
     def signal_handler(sig, frame):
+        print ("Closing server...")
         s.close()
         s_server3.close()
         sys.exit(0)
-    signal.signal(signal.SIGCHLD, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
     CONNECTED = False
     messages = []
     timeout = 15
+    heartbeat = 5  
+    
     while True:
         if PRIMARY:
             if CONNECTED:
@@ -328,9 +318,12 @@ if __name__ == "__main__":
                 if heartbeat < 1:
                     heartbeat = 5
                     print ("Sending heartbeat...")
-                    rBroadcast(str(MESSAGE_ID) + 'ç' + "HEARTBEAT")
-                    MESSAGE_ID += 1
-                    continue
+                    for server in SERVERS_HEARTBEAT:
+                        s_serverhb = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                        s_serverhb.connect( ('', server) )
+                        s_serverhb.sendall(message.encode())
+                        s_serverhb.close()
+
             try:
                 readable, writable, exceptional = select.select([s, s_server3, s_server3hb], [], [], 0.5)
             except select.error:
@@ -428,24 +421,39 @@ if __name__ == "__main__":
                     print ("----------------------------------" + str(timeout) + "----------------------------------")
                     timeout -= 1
                     if timeout < 1 and not CANDIDATE:
+                        SERVERS.remove(WHO_PRIMARY)
+                        SERVERS_HEARTBEAT.remove(PORTS[WHO_PRIMARY])
+                        WHO_PRIMARY = 0
                         CANDIDATE = True
-                        S1_DOWN = True
-                        CONNECTED = False
-                        print ("Sending message to server 2...")
-                        s_server2 = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
-                        s_server2.connect( ('', SERVER2HEARTBEAT_PORT) )
-                        s_server2.sendall(str(SERVER).encode())
-                        s_server2.close()
+                        print ("Sending CHALLENGE message to rest of the servers...")
+
+                        for server in SERVERS_HEARTBEAT:
+                            s_server3a = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                            s_server3a.connect( ('', server) )
+                            s_server3a.sendall(str(SERVER).encode() + '?'.encode() + str(SERVER3HEARTBEAT_PORT).encode())
+                            s_server3a.close()
+
                         CHALLENGE_MSG_ID -= 1
                         timeout = 10
 
-                    if timeout < 1 and CANDIDATE:
-                        CONNECTED = True
-                        s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-                        s.bind(('', PORT))
-                        s.listen(5)
-                        PRIMARY = True
-                        break
+                if timeout < 1 and CANDIDATE:
+                    print ("Became Primary")
+                    CONNECTED = True
+                    WHO_PRIMARY = SERVER3_PORT
+
+                    for i in range (len(SERVERS_HEARTBEAT)):
+                        s_server = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+
+                        print ("Sending winner message to server " + str(SERVERS[i]) + "...")
+                        s_server.connect( ('', SERVERS_HEARTBEAT[i]) )
+                        s_server.sendall('LEADER?'.encode() + str(SERVER3_PORT).encode())
+                        s_server.close()
+
+                    s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+                    s.bind(('', PORT))
+                    s.listen(5)
+                    PRIMARY = True
+                    break
 
                 readable, writable, exceptional = select.select(sockets, [], [], 0.5)
 
@@ -500,7 +508,7 @@ if __name__ == "__main__":
                                     dialog.sendall('ER'.encode())
                                     dialog.close()
                                     continue
-
+                                
                                 messages.append(message_id)
                                 dialog.sendall('OK'.encode())
                                 dialog.close()
@@ -593,8 +601,24 @@ if __name__ == "__main__":
                             timeout = 15
                             dialog.close()
 
+                        elif message_complete.startswith( 'LEADER' ):
+                            message_split = message_complete.split('?')
+                            message = message_split[1]
+
+                            timeout = 15
+                            WHO_PRIMARY = int(message)
+                            CANDIDATE = False
+                            CONNECTED = True
+                            dialog.close()
+
                         else:
-                            if int(message_complete) > SERVER:
-                                dialog.sendall('OK'.encode())
+                            message_split = message_complete.split('?')
+                            message_server = message_split[0]
+                            message_hbport = message_split[1]
+
+                            if int(message_server) > SERVER:
                                 dialog.close()
-                            S1_DOWN = True
+                                s_server3l = socket.socket( socket.AF_INET, socket.SOCK_STREAM )       
+                                s_server3l.connect( ('', int(message_hbport)) )
+                                s_server3l.sendall('OK'.encode())
+                                s_server3l.close()
